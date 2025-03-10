@@ -1,0 +1,37 @@
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px
+}
+
+.title {
+  font-size: 28px;
+  font-weight: bold;
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+.status {
+  margin-bottom: 10px;
+}
+
+.statusItem {
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+}
+
+.statusItem > span:first-child {
+  font-size: 18px;
+}
+
+.statusItem > span:last-child {
+  display: inline-block;
+  margin-left: 10px;
+  font-size: 18px;
+  color: #161515;
+}
+
+.btnR20 {
+  margin-right: 20px;
+}

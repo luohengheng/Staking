@@ -1,0 +1,11 @@
+.container {
+    @apply w-full h-screen;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.title {
+    font-size: 40px;
+    font-weight: bold;
+}
