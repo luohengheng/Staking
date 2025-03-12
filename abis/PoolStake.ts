@@ -1349,4 +1349,4 @@ export const PoolStakeAbi = [
         "stateMutability": "view",
         "type": "function"
     }
-]
+] as const

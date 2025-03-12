@@ -91,6 +91,7 @@ export const useWalletInfo = (targetChainId: any) => {
     }
   }, [isClient, walletInfo, balance, walletConnect, isConnected, chainId, chainIdInfo]);
 
+  // console.log('1111', balance, chainId, account);
   return {
     balance,
     chainId,

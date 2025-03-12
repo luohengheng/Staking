@@ -33,7 +33,7 @@ const poolStakeConfig = {
   abi: PoolStakeAbi,
 };
 
-type IPool = {
+interface IPool {
   stTokenAddress: string; // 质押代币的地址。
   poolWeight: bigint; // 质押池的权重，影响奖励分配。
   lastRewardBlock: bigint; // 最后一次计算奖励的区块号。
@@ -41,14 +41,15 @@ type IPool = {
   stTokenAmount: bigint; // 池中的总质押代币量。
   minDepositAmount: bigint; // 最小质押金额。
   unstakeLockedBlocks: bigint; // 解除质押的锁定区块数。
-};
+}
 
-type IUser = {
+interface IUser {
   stAmount: bigint; // 用户质押的代币数量。
   finishedRCC: bigint; // 已分配的 RCC 数量。
   pendingRCC: bigint; // 待领取的 RCC 数量。
+  pendingWithdrawAmount?: bigint; // 已解压待提现的代币数量。
   requests?: any[]; // 解质押请求列表，每个请求包含解质押数量和解锁区块。
-};
+}
 
 const PoolStake = () => {
   const { message } = App.useApp();
@@ -66,6 +67,10 @@ const PoolStake = () => {
   const [modalPoolIndex, setModalPoolIndex] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [unstakeAmount, setUnstakeAmount] = useState<string>("");
+  const [pauseData, setPauseData] = useState<{
+    withdrawPaused: boolean;
+    claimPaused: boolean;
+  }>({ withdrawPaused: false, claimPaused: false });
 
   const poolLengthFn = useCallback(async () => {
     try {
@@ -112,6 +117,7 @@ const PoolStake = () => {
   const userInPoolDetailFn = useCallback(
     async (poolIndex: bigint) => {
       try {
+        if (!account) return;
         const userDetail = (await readContract(config, {
           ...poolStakeConfig,
           functionName: "user",
@@ -119,10 +125,17 @@ const PoolStake = () => {
         })) as [bigint, bigint, bigint];
 
         console.log("userDetail", userDetail);
+        const [_, pendingWithdrawAmount] = (await readContract(config, {
+          ...poolStakeConfig,
+          functionName: "withdrawAmount",
+          args: [poolIndex, account],
+        })) as [bigint, bigint];
+
         curUserInPoolInfo[Number(poolIndex)] = {
           stAmount: userDetail[0],
           finishedRCC: userDetail[1],
           pendingRCC: userDetail[2],
+          pendingWithdrawAmount: pendingWithdrawAmount,
         } as IUser;
         setCurUserInPoolInfo([...curUserInPoolInfo]);
       } catch (error) {
@@ -131,6 +144,30 @@ const PoolStake = () => {
     },
     [config, poolStakeConfig, curUserInPoolInfo, account]
   );
+
+  const pauseStakeFn = useCallback(async () => {
+    try {
+      const res = (await readContracts(config, {
+        contracts: [
+          {
+            ...poolStakeConfig,
+            functionName: "withdrawPaused",
+          },
+          {
+            ...poolStakeConfig,
+            functionName: "claimPaused",
+          },
+        ],
+      })) as { result: boolean }[];
+
+      setPauseData({
+        withdrawPaused: res[0].result,
+        claimPaused: res[1].result,
+      });
+    } catch (error) {
+      console.log("error", error);
+    }
+  }, []);
 
   useEffect(() => {
     if (isClient && account && chainId) {
@@ -142,6 +179,8 @@ const PoolStake = () => {
     if (!isClient) return;
     // 获取pool数量
     poolLengthFn();
+    // 获取质押池 提现代币，领取RCC 状态
+    pauseStakeFn();
   }, [isClient]);
 
   // 创建质押池
@@ -152,7 +191,7 @@ const PoolStake = () => {
       if (poolLength === 0n) {
         _stTokenAddress = "0x0000000000000000000000000000000000000000";
       } else {
-        _stTokenAddress = IDOTokenAddress as `0x${string}`;
+        _stTokenAddress = IDOTokenAddress;
       }
       let _poolWeight = 10n;
       let _minDepositAmount = 10n;
@@ -162,7 +201,7 @@ const PoolStake = () => {
         ...poolStakeConfig,
         functionName: "addPool",
         args: [
-          _stTokenAddress,
+          _stTokenAddress as `0x${string}`,
           _poolWeight,
           _minDepositAmount,
           _unstakeLockedBlocks,
@@ -181,19 +220,23 @@ const PoolStake = () => {
   // 质押 根据index判断是质押ETH还是质押Token, 默认第一个是ETH其他是Token
   const depositFn = useCallback(async (index: number) => {
     try {
-      if (index === 0) {
-        console.log("index", index);
-        const tx = await writeContract(config, {
-          ...poolStakeConfig,
-          functionName: "depositETH",
-          args: [],
-          value: parseEther("0.00001"),
-        });
-        await waitForTransactionReceipt(config, { hash: tx });
-        poolDetailFn(BigInt(index));
-      } else {
-        console.log("index", index);
-      }
+      const tx = await writeContract(
+        config,
+        index === 0
+          ? {
+              ...poolStakeConfig,
+              functionName: "depositETH",
+              args: [],
+              value: parseEther("0.00001"),
+            }
+          : {
+              ...poolStakeConfig,
+              functionName: "deposit",
+              args: [BigInt(index), parseEther("1")],
+            }
+      );
+      await waitForTransactionReceipt(config, { hash: tx });
+      poolDetailFn(BigInt(index));
       message.success("质押成功");
     } catch (error) {
       console.log("error", error);
@@ -252,6 +295,50 @@ const PoolStake = () => {
     }
   }, []);
 
+  // 开启提现
+  const withdrawStatusFn = useCallback(
+    async (bool: boolean) => {
+      try {
+        const tx = await writeContract(config, {
+          ...poolStakeConfig,
+          functionName: bool ? "pauseWithdraw" : "unpauseWithdraw",
+          args: [],
+        });
+        await waitForTransactionReceipt(config, { hash: tx });
+        setPauseData({
+          withdrawPaused: bool,
+          claimPaused: pauseData.claimPaused,
+        });
+        message.success(bool ? "暂停提现" : "开启提现");
+      } catch (error) {
+        console.log("error", error);
+      }
+    },
+    [pauseData]
+  );
+
+  // 开启领取奖励
+  const claimStatusFn = useCallback(
+    async (bool: boolean) => {
+      try {
+        const tx = await writeContract(config, {
+          ...poolStakeConfig,
+          functionName: bool ? "pauseClaim" : "unpauseClaim",
+          args: [],
+        });
+        await waitForTransactionReceipt(config, { hash: tx });
+        setPauseData({
+          withdrawPaused: pauseData.withdrawPaused,
+          claimPaused: bool,
+        });
+        message.success(bool ? "暂停领取奖励" : "开启领取奖励");
+      } catch (error) {
+        console.log("error", error);
+      }
+    },
+    [pauseData]
+  );
+
   //  console.log("222", balance, chainId, account);
   return (
     <div className={styles.container}>
@@ -261,9 +348,27 @@ const PoolStake = () => {
 
       <div className={styles.title}>
         Pool Stake 当前区块({Number(blockNumber)})
-        <Button type="primary" onClick={createPool}>
-          Create Pool
-        </Button>
+        <div className={styles.btns}>
+          <Button
+            type={pauseData.withdrawPaused ? "dashed" : "primary"}
+            onClick={() => {
+              withdrawStatusFn(!pauseData.withdrawPaused);
+            }}
+          >
+            提现 开启 / 暂停
+          </Button>
+          <Button
+            type={pauseData.claimPaused ? "dashed" : "primary"}
+            onClick={() => {
+              claimStatusFn(!pauseData.claimPaused);
+            }}
+          >
+            领取奖励 开启 / 暂停
+          </Button>
+          <Button type="primary" onClick={createPool}>
+            Create Pool
+          </Button>
+        </div>
       </div>
       {poolLength > 0n ? (
         poolArray.map((item, index) => (
@@ -349,6 +454,13 @@ const PoolStake = () => {
             {curUserInPoolInfo[modalPoolIndex]?.stAmount?.toString()} Token
           </p>
           <p className={styles.pItem}>
+            <span>用户解压待提现的代币数量: </span>
+            {curUserInPoolInfo[
+              modalPoolIndex
+            ]?.pendingWithdrawAmount?.toString()}{" "}
+            Token
+          </p>
+          <p className={styles.pItem}>
             <span>已分配的 RCC 数量: </span>
             {curUserInPoolInfo[modalPoolIndex]?.finishedRCC?.toString()} RCC
           </p>
@@ -397,6 +509,10 @@ const PoolStake = () => {
 
           <div className={styles.footerBtns}>
             <Button
+              disabled={
+                curUserInPoolInfo[modalPoolIndex]?.pendingWithdrawAmount ===
+                  0n || pauseData.withdrawPaused
+              }
               className={styles.cardTitleBtn}
               type="primary"
               onClick={() => {
@@ -407,7 +523,10 @@ const PoolStake = () => {
             </Button>
 
             <Button
-              disabled={curUserInPoolInfo[modalPoolIndex]?.pendingRCC === 0n}
+              disabled={
+                curUserInPoolInfo[modalPoolIndex]?.pendingRCC === 0n ||
+                pauseData.claimPaused
+              }
               className={styles.cardTitleBtn}
               type="primary"
               onClick={() => {
