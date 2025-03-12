@@ -1,0 +1,60 @@
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.connectButtonClass {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: bold;
+  margin-top: 10px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cardTitle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cardTitleBtn {
+  margin-left: 5px;
+}
+
+.pItem {
+  margin-bottom: 10px;
+}
+
+.pItem > span {
+  font-weight: bold;
+  color: #000;
+}
+
+.modalContent {
+  display: flex;
+  flex-direction: column;
+}
+
+.inpAndBtn {
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+}
+
+.footerBtns {
+  display: flex;
+  align-items: center;
+}
+
+.footerBtns > button {
+  flex: 1;
+}

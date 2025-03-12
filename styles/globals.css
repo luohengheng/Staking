@@ -67,9 +67,17 @@
   }
 }
 
-.showNav {
+.content {
   padding-top: 60px;
   box-sizing: border-box;
   width: 100%;
   height: 100%;
+}
+
+/* 自定义字体 */
+@font-face {
+  font-family: 'CustomFont';
+  src: url('/fonts/SAF.otf') format('otf');
+  font-weight: normal;
+  font-style: normal;
 }

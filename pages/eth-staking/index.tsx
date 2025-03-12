@@ -11,11 +11,13 @@ import {
   useReadContracts,
   useWatchContractEvent,
 } from "wagmi";
-import { writeContract, waitForTransactionReceipt } from "@wagmi/core";
+import { writeContract, waitForTransactionReceipt, switchChain } from "@wagmi/core";
 import { config } from "@/config";
 import { injected } from "wagmi/connectors";
 import { formatEther, parseEther } from "viem";
 import { stakingABI } from "@/abis/StakingABI.js";
+import { App } from "antd";
+import { sepolia } from 'wagmi/chains'
 
 //todo sepolia网络
 const StakingContractAddress = "0x723C6b5909acc2dC4043D9cA91E9c7Fa0e62E800";
@@ -27,6 +29,7 @@ const stakingContractConfig = {
 };
 
 const ETHStaking = () => {
+  const { message } = App.useApp();
   const { isClient } = useEnvironment();
   const { address, chain, isConnected } = useAccount();
   const { connect } = useConnect();
@@ -60,7 +63,7 @@ const ETHStaking = () => {
       },
     ],
     query: {
-      enabled: isConnected,
+      enabled: isConnected && chain?.id === 11155111,
     },
   });
 
@@ -92,11 +95,18 @@ const ETHStaking = () => {
 
   useEffect(() => {
     if (!isClient) return;
-    if (isClient && !isConnected && connect) {
+    if (isClient && !isConnected && connect && chain?.id) {
       // 自动连接签包
       connect({ connector: injected() });
+      refetchContractData();
     }
-  }, [isClient, isConnected, connect]);
+    if (isClient && chain?.id !== sepolia.id) {
+      message.error("请切换到Sepolia测试网络");
+      switchChain(config, { chainId: sepolia.id }).then(() => {
+        message.success("已切换到Sepolia测试网络");
+      })
+    }
+  }, [isClient, isConnected, connect, message, chain?.id, refetchContractData]);
 
   // 质押0.0001ETH
   const stake = async () => {
@@ -139,6 +149,7 @@ const ETHStaking = () => {
     }
   };
 
+  console.log("rContractData", rContractData);
   if (!isClient) return null;
   return (
     <div className={styles.container}>
