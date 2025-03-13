@@ -370,9 +370,10 @@ const PoolStake = () => {
           </Button>
         </div>
       </div>
-      {poolLength > 0n ? (
-        poolArray.map((item, index) => (
-          <Card
+      <div className={styles.poolList}>
+        {poolLength > 0n ? (
+          poolArray.map((item, index) => (
+            <Card
             onClick={() => {
               userInPoolDetailFn(BigInt(index));
               setModalPoolIndex(index);
@@ -439,8 +440,9 @@ const PoolStake = () => {
               Create Pool
             </Button>
           }
-        />
-      )}
+          />
+        )}
+      </div>
 
       <Modal
         title="用户质押详情"
